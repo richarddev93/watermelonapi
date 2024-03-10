@@ -38,7 +38,7 @@ async function update(req, res) {
 }
 
 async function deleteByID(req, res) {
-  console.log("deleteByID,", req.params)
+  console.log("deleteByID,", req.params);
   const data = await BookService.deleteByID(req.params.bookID);
 
   res.json(data);
@@ -47,16 +47,12 @@ async function pullChanges(req, res) {
   const { bookID } = req.params;
   const { last_pulled_at } = req.query;
 
-  console.log("1 -Controller - PULL CHANGES");
-
   //primeiro buscar todos os itens  basecom base no id e last_pulled_at
   //se o last_pulled_at vier vazio trazer tudo
-
   const dataAll = await BookService.findByIDAndLastPull({
     bookID,
     last_pulled_at,
   });
-
   const isFirstSync =
     last_pulled_at === null ||
     last_pulled_at === 0 ||
@@ -84,8 +80,67 @@ async function pullChanges(req, res) {
       deleted: deletedRecordIds,
     },
   };
-
   res.json({ changes, timestamp: Date.now() });
+}
+
+async function pushChanges(req, res) {
+  const tableName = "books";
+
+  const { last_pulled_at } = req.query;
+  const { changes } = req.body;
+  const changesAux = [...Object.values(changes)];
+
+  const changesData = changes[tableName];
+  if (changesData) {
+    // separa e cria tudo que é created
+    const { created, updated, deleted } = changesData;
+
+    //verificar se vale verifica se as infos de lastupdate estão ok
+    // e contar com mais uma etapa de validação para a criação, se oarquivo nunca foi pullado
+    //do server certeza que cria, se não atualiza
+    // todo: adicionar mais essa verificação
+
+    created.forEach(async (element) => {
+      element.last_pulled_at = last_pulled_at;
+      const isAlready = await BookService.findByID(element.id);
+      let data = null;
+      if (isAlready) {
+        const id = element.id;
+        delete element.id;
+        data = await BookService.update(id, element);
+      } else {
+        data = await BookService.create(element);
+      }
+      console.log("Criando ou atualizando...", data);
+    });
+
+    updated.forEach(async (element) => {
+      element.last_pulled_at = last_pulled_at;
+      const isAlready = await BookService.findByID(element.id);
+      let data = null;
+      if (isAlready) {
+        const id = element.id;
+        delete element.id;
+        data = await BookService.update(id, element);
+      } else {
+      }
+      console.log("Atualizado...", data);
+    });
+
+    deleted.forEach(async (element) => {
+      const isAlready = await BookService.findByID(element.id);
+      let data = null;
+      if (isAlready) {
+        const id = element.id;
+        delete element.id;
+        data = await BookService.deleteByID(id);
+      } else {
+      }
+      console.log("deletando...", data);
+    });
+  }
+
+  res.json({ ok:true, timestamp: Date.now() });
 }
 
 export default {
@@ -95,4 +150,5 @@ export default {
   update,
   deleteByID,
   pullChanges,
+  pushChanges,
 };

@@ -24,7 +24,7 @@ async function getByIdLastPullChange(idUser, last_pull_change) {
           ":value1": idUser,
         };
     const FilterExpression = last_pull_change
-      ? "id = :value1 AND last_pull_change > :value2"
+      ? "id = :value1 AND last_pulled_at > :value2"
       : "id  = :value1";
     const command = new ScanCommand({
       ProjectionExpression:
@@ -108,7 +108,7 @@ async function update(id, data) {
     "set " +
     Object.keys(data)
       .map((key) => `#${key} = :${key}`)
-      .join(" ") +
+      .join(", ") +
     `, #updated_at = :updated_at`;
 
   console.log(ExpressionAttributeValues);
