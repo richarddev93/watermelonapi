@@ -43,35 +43,37 @@ async function deleteByID(req, res) {
 
   res.json(data);
 }
-async function pullChanges(req, res) {
+async function pullChanges1(req, res) {
+  console.log("Executing pullChanges.....");
+
   const { bookID } = req.params;
   const { last_pulled_at } = req.query;
-
+  const isHaveLastPullDate =
+    last_pulled_at === "null" ? null : parseInt(last_pulled_at);
   //primeiro buscar todos os itens  basecom base no id e last_pulled_at
   //se o last_pulled_at vier vazio trazer tudo
-  const dataAll = await BookService.findByIDAndLastPull({
-    bookID,
-    last_pulled_at,
-  });
+  console.log("pullChanges ---------------------", isHaveLastPullDate);
+  const dataAll = await BookService.findAll();
+
   const isFirstSync =
     last_pulled_at === null ||
     last_pulled_at === 0 ||
     last_pulled_at == undefined;
-
+  console.log("dataAll", dataAll);
   // Filtrar registros criados ou atualizados após lastPulledAt
   const updatedRecords = dataAll.filter(
-    (record) => record.updated_at > last_pulled_at
+    (record) => record.updated_at > isHaveLastPullDate
   );
 
   // Filtrar IDs de registros excluídos após lastPulledAt
   const deletedRecordIds = dataAll
-    .filter((record) => record.deleted_at > last_pulled_at)
+    .filter((record) => record.deleted_at > isHaveLastPullDate)
     .map((record) => record.id);
 
   const tableName = "books";
   const created = isFirstSync
     ? dataAll
-    : dataAll.filter((record) => record.created_at > last_pulled_at);
+    : dataAll.filter((record) => record.created_at > isHaveLastPullDate);
 
   const changes = {
     [tableName]: {
@@ -83,25 +85,73 @@ async function pullChanges(req, res) {
   res.json({ changes, timestamp: Date.now() });
 }
 
+async function pullChanges(req, res) {
+  console.log("Executing pullChanges.....");
+
+  // Extrair parâmetros da requisição
+  const { bookID } = req.params;
+  const { last_pulled_at } = req.query;
+  const isHaveLastPullDate = last_pulled_at === "null" ? null : parseInt(last_pulled_at);
+  console.log("Extracted parameters:", { bookID, last_pulled_at, isHaveLastPullDate });
+
+  // Verificar se é a primeira sincronização
+  const isFirstSync = last_pulled_at === null || last_pulled_at === 0 || last_pulled_at == undefined;
+  console.log("Is first sync:", isFirstSync);
+
+  // Buscar todos os itens
+  console.log("Fetching all items...");
+  const dataAll = await BookService.findAll();
+  console.log("Fetched items:", dataAll);
+
+  // Filtrar registros criados ou atualizados após lastPulledAt
+  console.log("Filtering updated records...");
+  const updatedRecords = dataAll.filter((record) => record.updated_at > isHaveLastPullDate);
+
+  // Filtrar IDs de registros excluídos após lastPulledAt
+  console.log("Filtering deleted records...");
+  const deletedRecordIds = dataAll
+    .filter((record) => record.deleted_at > isHaveLastPullDate)
+    .map((record) => record.id);
+
+  // Determinar os registros criados após lastPulledAt
+  console.log("Determining created records...");
+  const created = isFirstSync
+    ? dataAll
+    : dataAll.filter((record) => record.created_at > isHaveLastPullDate);
+
+  // Construir objeto de mudanças
+  console.log("Building changes object...");
+  const changes = {
+    books: {
+      created: created,
+      updated: updatedRecords,
+      deleted: deletedRecordIds,
+    },
+  };
+
+  // Enviar resposta com as mudanças e o timestamp atual
+  console.log("Sending response...");
+  res.json({ changes, timestamp: Date.now() });
+}
+
+
 async function pushChanges(req, res) {
+  console.log("Executing pushChanges");
+
   const tableName = "books";
 
   const { last_pulled_at } = req.query;
-  const { changes } = req.body;
-  const changesAux = [...Object.values(changes)];
+  const changes = req.body;
 
   const changesData = changes[tableName];
-  if (changesData) {
-    // separa e cria tudo que é created
-    const { created, updated, deleted } = changesData;
 
-    //verificar se vale verifica se as infos de lastupdate estão ok
-    // e contar com mais uma etapa de validação para a criação, se oarquivo nunca foi pullado
-    //do server certeza que cria, se não atualiza
-    // todo: adicionar mais essa verificação
+  if (changesData) {
+    const { created, updated, deleted } = changesData;
 
     created.forEach(async (element) => {
       element.last_pulled_at = last_pulled_at;
+      element.lessons = element.lessons ? element.lessons : "l1";
+      console.log(element);
       const isAlready = await BookService.findByID(element.id);
       let data = null;
       if (isAlready) {
@@ -140,7 +190,7 @@ async function pushChanges(req, res) {
     });
   }
 
-  res.json({ ok:true, timestamp: Date.now() });
+  res.json({ ok: true, timestamp: Date.now() });
 }
 
 export default {

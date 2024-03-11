@@ -36,6 +36,8 @@ async function create(data) {
   data.updated_at = null;
   data.last_pulled_at = null;
 
+  console.log(data)
+
   return await bookRepository.create({
     ...data,
   });

@@ -13,27 +13,47 @@ import { ExportConflictException } from "@aws-sdk/client-dynamodb";
 const tableName = "books";
 
 async function getByIdLastPullChange(idUser, last_pull_change) {
-  console.log("3 - repository - getByIdLastPullChange");
+  console.log("3 - repository - getByIdLastPullChange", last_pull_change);
+  const isHaveLastPullDate =
+    last_pull_change === "null" ? null : last_pull_change;
+  let ExpressionAttributeValues = {
+    ":value1": parseInt(last_pull_change),
+  };
+
+  let FilterExpression = "last_pulled_at  > :value1";
+
   try {
-    const ExpressionAttributeValues = last_pull_change
-      ? {
-          ":value1": idUser,
-          ":value2": parseInt(last_pull_change),
-        }
-      : {
-          ":value1": idUser,
-        };
-    const FilterExpression = last_pull_change
-      ? "id = :value1 AND last_pulled_at > :value2"
-      : "id  = :value1";
-    const command = new ScanCommand({
+    if (idUser && isHaveLastPullDate) {
+      ExpressionAttributeValues = !!isHaveLastPullDate
+        ? {
+            ":value1": idUser,
+            ":value2": parseInt(last_pull_change),
+          }
+        : {
+            ":value1": idUser,
+          };
+      FilterExpression = !!isHaveLastPullDate
+        ? "id = :value1 AND last_pulled_at > :value2"
+        : "id  = :value1";
+    }
+
+
+    const params = !isHaveLastPullDate ? {
+      ProjectionExpression:
+        "#id, title, id_book, body,is_pinned,created_at,updated_at, last_pulled_at, lessons",
+      ExpressionAttributeNames: { "#id": "id" },
+      TableName: tableName,
+    } : {
       ProjectionExpression:
         "#id, title, id_book, body,is_pinned,created_at,updated_at, last_pulled_at, lessons",
       FilterExpression: FilterExpression,
       ExpressionAttributeNames: { "#id": "id" },
       ExpressionAttributeValues: ExpressionAttributeValues,
       TableName: tableName,
-    });
+    }
+    
+    console.log(params)
+    const command = new ScanCommand(params);
 
     const response = await commandDb(command);
     return response.Items || [];
@@ -110,10 +130,6 @@ async function update(id, data) {
       .map((key) => `#${key} = :${key}`)
       .join(", ") +
     `, #updated_at = :updated_at`;
-
-  console.log(ExpressionAttributeValues);
-  console.log(ExpressionAttributeNames);
-  console.log(UpdateExpression);
 
   const params = {
     TableName: tableName,
